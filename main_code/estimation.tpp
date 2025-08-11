@@ -5,12 +5,12 @@
 
 template <typename T>
 T pitch_Accelerometer(T AccX, T AccY, T AccZ) {
-    return std::atan2(-AccX, std::sqrt(AccY * AccY + AccZ * AccZ));
+    return atan2(-AccX, sqrt(AccY * AccY + AccZ * AccZ));
 }
 
 template <typename T>
 T roll_Accelerometer(T AccY, T AccZ) {
-    return std::atan2(AccY, AccZ);
+    return atan2(AccY, AccZ);
 }
 
 template <typename T>
@@ -79,12 +79,12 @@ void kalman_filter(T delta_time, T W_gyro, T Q[2][2], T R, T Y, T X_estimated[2]
 template <typename T>
 void euler2quat(T yaw, T pitch, T roll, T* output) {
 
-  T cr = std::cos(roll * 0.5);
-  T sr = std::sin(roll * 0.5);
-  T cp = std::cos(pitch * 0.5);
-  T sp = std::sin(pitch * 0.5);
-  T cy = std::cos(yaw * 0.5);
-  T sy = std::sin(yaw * 0.5);
+  T cr = cos(roll * 0.5);
+  T sr = sin(roll * 0.5);
+  T cp = cos(pitch * 0.5);
+  T sp = sin(pitch * 0.5);
+  T cy = cos(yaw * 0.5);
+  T sy = sin(yaw * 0.5);
 
   output[0] = cr * cp * cy + sr * sp * sy;
   output[1] = sr * cp * cy - cr * sp * sy;

@@ -9,7 +9,7 @@
 
 // Define regular functions
 
-void log_data(double dt, bool failsafe, bool bypass, double pitch, double roll, double angular_rate[3], double current_quaternion[4], double target_quaternion[4], double error_quaternion[4], double throttle_percent, double elevator_ang, double rudder_ang, double aileron_ang, bool header, File& dataFile);
+//void log_data(double dt, bool failsafe, bool bypass, double pitch, double roll, double angular_rate[3], double current_quaternion[4], double target_quaternion[4], double error_quaternion[4], double throttle_percent, double elevator_ang, double rudder_ang, double aileron_ang, bool header, File& dataFile);
 void flash_led(int pin, int repetitions, int period);
 
 // Define template functions

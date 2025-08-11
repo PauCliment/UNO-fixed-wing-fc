@@ -12,7 +12,7 @@ void quaternionPID(double err_quaternion[4], double int_quaternion[4], double an
   // Declare P, I and D terms
   double P_term, I_term, D_term;
 
-  // Apply PID equation to each axis
+  // Apply PID equation to each axis: Roll - Pitch - Yaw
   for(int i = 0; i < 3; i++){
     att_sign = sign(err_quaternion[0]);
     int_sign = sign(int_quaternion[0]);

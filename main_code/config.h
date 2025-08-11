@@ -5,9 +5,9 @@
 #include <stdint.h>
 
 // Specify control gains
-const double Kp[3] = {100.0, 175.0, 0.0};
-const double Ki[3] = {225.0, 225.0, 0.0};
-const double Kd[3] = {5.0, 5.0, 8.0};
+const double Kp[3] = {50.0, 75.0, 0.0};
+const double Ki[3] = {100.0, 150.0, 0.0};
+const double Kd[3] = {4.0, 5.0, 8.0};
 
 // Specify name of the data file
 const char *fileName = "data.txt";

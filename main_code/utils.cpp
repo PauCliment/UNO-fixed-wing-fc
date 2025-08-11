@@ -1,5 +1,6 @@
 #include "utils.h"
 
+/*
 void log_data(double dt, bool failsafe, bool bypass, double pitch, double roll, double angular_rate[3], double current_quaternion[4], double target_quaternion[4], double error_quaternion[4], double throttle_percent, double elevator_ang, double rudder_ang, double aileron_ang, bool header, File& dataFile) {
   
   if (dataFile) {
@@ -50,14 +51,15 @@ void log_data(double dt, bool failsafe, bool bypass, double pitch, double roll, 
     Serial.println("SD error");
   }
 }
+*/
 
 void flash_led(int pin, int repetitions, int period){
   // initialize digital pin LED_BUILTIN as an output.
   pinMode(pin, OUTPUT);
   for(int i = 0; i < repetitions; i++){
     digitalWrite(pin, HIGH);   // turn the LED on (HIGH is the voltage level)
-    delay(period);                         // wait for 50 ms
+    //delay(period);                         // wait for 50 ms
     digitalWrite(pin, LOW);    // turn the LED off by making the voltage LOW
-    delay(period);                         // wait for 50 ms 
+    //delay(period);                         // wait for 50 ms 
   }
 }

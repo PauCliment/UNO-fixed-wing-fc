@@ -1,7 +1,7 @@
 // Include libraries to be used
-#include <PWMServo.h>
+#include <Servo.h>
 #include <Wire.h>
-#include "sbus.h"
+#include <SBUS.h>
 #include <math.h>
 #include <SPI.h>
 #include <SD.h>
@@ -19,15 +19,13 @@
 int error = 1;
 
 // Initialize SBUS objects for reading and writing on RX0
-bfs::SbusRx sbus_rx(&Serial1);
-bfs::SbusTx sbus_tx(&Serial1);
-bfs::SbusData data;
+SBUS sbus(Serial);
 
 // Declare control action
 double control_action[3] = {0.0, 0.0, 0.0};
 
 // Initialize servo objects
-PWMServo elevator, throttle, aileron, rudder;
+Servo elevator, throttle, aileron, rudder;
 
 // Initialize Time management variables
 double delta_time = 0.0;
@@ -81,7 +79,7 @@ double yaw_rate_tg = 0.0;
 // Begin setup
 void setup() {
   // Initialize USB serial communications
-  Serial.begin(9600);
+  //Serial.begin(9600);
 
   // Perform IMU setup
   Wire.begin();
@@ -90,7 +88,7 @@ void setup() {
       
   error = 1;
   while (error != 0){
-    Serial.println("MPU error");
+    //Serial.println("MPU error");
     error = MPU_config();
   }
 
@@ -100,10 +98,8 @@ void setup() {
   aileron.attach(aileron_pin, min_servo, max_servo);
   rudder.attach(rudder_pin, min_servo, max_servo);
 
-  // Begin SBUS communications
-  sbus_rx.Begin();
-  sbus_tx.Begin();
-  delay(100);
+  // Use manual processing for sbus
+  sbus.begin(false);
   
   // Begin SD card communications
   /*
@@ -136,12 +132,13 @@ void setup() {
 }
 
 void loop () {
+
   // Begin transmission with the IMU over the Accelerometer register
   Wire.beginTransmission(MPU_6050);
   Wire.write(ACCEL_XOUT_H);
   error = Wire.endTransmission(false);
   if (error != 0) {
-    Serial.println("MPU error");
+    //Serial.println("MPU error");
     MPU_config();
     digitalWrite(statusLED, HIGH);
   }
@@ -150,7 +147,7 @@ void loop () {
   }
 
   // Extract accelerometer data
-  Wire.requestFrom(MPU_6050, 6, true); // Extract the 6 following registers where all the acc data is stored
+  Wire.requestFrom(MPU_6050, (uint8_t)6, (uint8_t)true); // Extract the 6 following registers where all the acc data is stored
   int16_t ACCEL_OUT_X = Wire.read() << 8 | Wire.read();
   int16_t ACCEL_OUT_Y = Wire.read() << 8 | Wire.read();
   int16_t ACCEL_OUT_Z = Wire.read() << 8 | Wire.read();
@@ -166,7 +163,7 @@ void loop () {
   sd_timer += delta_time;
 
   // Extrac gyroscope data
-  Wire.requestFrom(MPU_6050, 6, true); // Extract the 6 following registers where all the acc data is stored
+  Wire.requestFrom(MPU_6050, (uint8_t)6, (uint8_t)true); // Extract the 6 following registers where all the acc data is stored
   int16_t GYRO_OUT_X = Wire.read() << 8 | Wire.read();
   int16_t GYRO_OUT_Y = Wire.read() << 8 | Wire.read();
   int16_t GYRO_OUT_Z = Wire.read() << 8 | Wire.read();
@@ -187,112 +184,105 @@ void loop () {
   kalman_filter(delta_time, GYRO_values[0], Q_roll, R_roll, Y_roll, X_roll, P_roll);
   kalman_filter(delta_time, GYRO_values[1], Q_pitch, R_pitch, Y_pitch, X_pitch, P_pitch);
 
-  Serial.print(X_pitch[0] * 180.0 / M_PI);
-  Serial.print(", ");
-  Serial.println(X_roll[0] * 180.0 / M_PI);
-
   // Remove bias from angular rate estimation
   angular_rate[0] = GYRO_values[0] - X_roll[1];
   angular_rate[1] = GYRO_values[1] - X_pitch[1];
   angular_rate[2] = GYRO_values[2];
 
+  // Call SBUS
+  sbus.process();
+
   // If receiver is connected
-  if (sbus_rx.Read()) {
-    // Grab the received data
-    data = sbus_rx.data();
 
-    // If RX detects failsafe, set mode to failsafe
-    if(data.failsafe == 1){
-      failsafe_mode = true;
+  // If RX detects failsafe, set mode to failsafe
+  if(sbus.getFailsafeStatus() == SBUS_FAILSAFE_ACTIVE){
+    failsafe_mode = true;
 
-      // Set servo commands to neutral and throttle to zero
-      rudder_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
-      elevator_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
-      aileron_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
-      throttle_angle = 0.0;
+    // Set servo commands to neutral and throttle to zero
+    rudder_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
+    elevator_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
+    aileron_angle = map(mid_sbus, min_sbus, max_sbus, -90.0, 90.0);
+    throttle_angle = 0.0;
+  }
+
+  else{
+
+    // Read all channel data
+    for(int ch_counter = 0; ch_counter < 8; ch_counter ++){
+      
+      // Read the data and set to middle values for deadband
+      unsigned int data_ch = sbus.getChannel(ch_counter + 1);
+      RX_cmd[ch_counter] = constrain(data_ch, min_sbus, max_sbus);
+      if(data_ch < mid_sbus + deadband_sbus && data_ch > mid_sbus - deadband_sbus)
+        RX_cmd[ch_counter] = mid_sbus;
     }
 
+    // Check manual bypass switch
+    manual_bypass = (RX_cmd[4] > mid_sbus) ? false : true;
+
+    // Check attitude reset switch
+    if (RX_cmd[5] > mid_sbus){
+      // Set target attitude to zero
+      pitch_tg = 0.0;
+      roll_tg = 0.0;
+
+      // Set quaternion error integral to zero
+      for(int i = 0; i < 4; i++){
+        quaternion_t2b_int[i] = 0.0;
+      }
+    }
+
+    // Set commands to the servos
+    if(manual_bypass == true || error != 0){
+      // Set quaternion error integral to zero
+      for(int i = 0; i < 4; i++){
+        quaternion_t2b_int[i] = 0.0;
+      }
+
+      // Set servo commands to direct manual values
+      rudder_angle = map(RX_cmd[3], min_sbus, max_sbus, min_rudder, max_rudder);
+      elevator_angle = map(RX_cmd[2], min_sbus, max_sbus, min_elevator, max_elevator);
+      aileron_angle = map(RX_cmd[1], min_sbus, max_sbus, min_aileron, max_aileron);
+
+      // Set current attitude as target attitude to avoid abrupt changes into stabilized mode
+      pitch_tg = X_pitch[0];
+      roll_tg = X_roll[0];
+      yaw_rate_tg = 0.0;
+    }
+    
     else{
 
-      // Read all channel data
-      for(int ch_counter = 0; ch_counter < 8; ch_counter ++){
-        
-        // Read the data and set to middle values for deadband
-        RX_cmd[ch_counter] = constrain(data.ch[ch_counter], min_sbus, max_sbus);
-        if(data.ch[ch_counter] < mid_sbus + deadband_sbus && data.ch[ch_counter] > mid_sbus - deadband_sbus)
-          RX_cmd[ch_counter] = mid_sbus;
+      // Update the target pitch and roll
+      pitch_tg -= map_Generic((double)RX_cmd[2], min_sbus, max_sbus, -max_pitch_rate, max_pitch_rate) * delta_time;
+      roll_tg += map_Generic((double)RX_cmd[1], min_sbus, max_sbus, -max_roll_rate, max_roll_rate) * delta_time;
+      yaw_rate_tg = map_Generic((double)RX_cmd[3], min_sbus, max_sbus, -max_yaw_rate, max_yaw_rate);
+    
+      // Update the current and target quaternion
+      euler2quat(0.0, X_pitch[0], X_roll[0], quaternion_f2b);
+      euler2quat(0.0, pitch_tg, roll_tg, quaternion_f2t);
+
+      // Compute the quaternion error
+      quaternion_error(quaternion_f2t, quaternion_f2b, quaternion_t2b);
+
+      // Update quaternion error integral
+      for(int i = 0; i < 4; i++){
+        quaternion_t2b_int[i] += quaternion_t2b[i] * delta_time;
       }
 
-      // Check manual bypass switch
-      manual_bypass = (RX_cmd[4] > mid_sbus) ? false : true;
+      // Apply quaternion PID
+      quaternionPID(quaternion_t2b, quaternion_t2b_int, angular_rate, yaw_rate_tg, Kp, Ki, Kd, control_action);
 
-      // Check attitude reset switch
-      if (RX_cmd[5] > mid_sbus){
-        // Set target attitude to zero
-        pitch_tg = 0.0;
-        roll_tg = 0.0;
-
-        // Set quaternion error integral to zero
-        for(int i = 0; i < 4; i++){
-          quaternion_t2b_int[i] = 0.0;
-        }
-
-      }
-
-      // Set commands to the servos
-      if(manual_bypass == true || error != 0){
-        // Set quaternion error integral to zero
-        for(int i = 0; i < 4; i++){
-          quaternion_t2b_int[i] = 0.0;
-        }
-
-        // Set servo commands to direct manual values
-        rudder_angle = map(RX_cmd[3], min_sbus, max_sbus, min_rudder, max_rudder);
-        elevator_angle = map(RX_cmd[2], min_sbus, max_sbus, min_elevator, max_elevator);
-        aileron_angle = map(RX_cmd[1], min_sbus, max_sbus, min_aileron, max_aileron);
-      }
-      else{
-
-        // Update the target pitch and roll
-        pitch_tg -= map_Generic((double)RX_cmd[2], min_sbus, max_sbus, -max_pitch_rate, max_pitch_rate) * delta_time;
-        roll_tg += map_Generic((double)RX_cmd[1], min_sbus, max_sbus, -max_roll_rate, max_roll_rate) * delta_time;
-        yaw_rate_tg = map_Generic((double)RX_cmd[3], min_sbus, max_sbus, -max_yaw_rate, max_yaw_rate);
-
-        Serial.print(pitch_tg);
-        Serial.print(" ");
-        Serial.print(roll_tg);
-        Serial.print(" ");
-        Serial.println(yaw_rate_tg);
-        //Serial.println((double) RX_cmd[2]);
-      
-        // Update the current and target quaternion
-        euler2quat(0.0, X_pitch[0], X_roll[0], quaternion_f2b);
-        euler2quat(0.0, pitch_tg, roll_tg, quaternion_f2t);
-
-        // Compute the quaternion error
-        quaternion_error(quaternion_f2t, quaternion_f2b, quaternion_t2b);
-
-        // Update quaternion error integral
-        for(int i = 0; i < 4; i++){
-          quaternion_t2b_int[i] += quaternion_t2b[i] * delta_time;
-        }
-
-        // Apply quaternion PID
-        quaternionPID(quaternion_t2b, quaternion_t2b_int, angular_rate, yaw_rate_tg, Kp, Ki, Kd, control_action);
-
-        // Set servo commands to stabilized values with control loop
-        elevator_angle = - saturate(control_action[1], (double) min_elevator, (double) max_elevator);
-        aileron_angle = saturate(control_action[0], (double) min_aileron, (double) max_aileron);
-        rudder_angle = saturate(control_action[2], (double) min_rudder, (double) max_rudder);
-      }
-
-      // Set command to the throttle
-      throttle_angle = map(RX_cmd[0], min_sbus, max_sbus, 0.0, 180.0);
-
-      // Saturate command values
-      throttle_angle = saturate(throttle_angle, (double) min_throttle, (double) max_throttle);
-
+      // Set servo commands to stabilized values with control loop
+      elevator_angle = - saturate(control_action[1], (double) min_elevator, (double) max_elevator);
+      aileron_angle = saturate(control_action[0], (double) min_aileron, (double) max_aileron);
+      rudder_angle = saturate(control_action[2], (double) min_rudder, (double) max_rudder);
     }
+
+    // Set command to the throttle
+    throttle_angle = map(RX_cmd[0], min_sbus, max_sbus, 0.0, 180.0);
+
+    // Saturate command values
+    throttle_angle = saturate(throttle_angle, (double) min_throttle, (double) max_throttle);
 
   }
 
