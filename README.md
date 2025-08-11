@@ -10,9 +10,9 @@ A lightweight, robust, and real-time flight control system designed for small fi
 - Assist pilots during flight by reducing control workload and improving stability.
 - Reject disturbances such as wind gusts using onboard sensor feedback and control algorithms.
 
-<div style="text-align: center;">
-<img src="media/plane-scheme.png" alt="Flight Controller Diagram" width="200">
-</div>
+<p align="center">
+<img src="media/plane-scheme.png" alt="Flight Controller Diagram" width="300">
+</p>
 
 ---
 
@@ -26,9 +26,9 @@ The system runs on a custom flight computer built around an **Arduino UNO R3** a
 - Interfaces for actuator outputs and RC receiver inputs
 - Power distribution for onboard electronics
 
-<div style="text-align: center;">
+<p align="center">
 <img src="media/FC-diagram.png" alt="Flight Controller Diagram" width="450">
-</div>
+</p>
 
 The Arduino-based controller interprets RC commands, estimates aircraft attitude, and computes control actions to achieve the commanded orientation while maintaining stability.
 
